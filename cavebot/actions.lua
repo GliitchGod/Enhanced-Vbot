@@ -290,65 +290,33 @@ CaveBot.registerAction("goto", "green", function(value, retries, prev)
   
   if CaveBot.Config.get("mapClick") then
     if retries >= 5 then
-      if CaveBot.Config.get("skipBlocked") then
-        debugLog("info", string.format("CaveBot: Skipping unreachable waypoint after 5 retries at (%d, %d, %d) - moving to next",
-          pos.x or 0, pos.y or 0, pos.z or 0))
-        noPath = noPath + 1
-        pathfinder()
-        return false -- Skip this waypoint and move to next
-      else
-        noPath = noPath + 1
-        pathfinder()
-        return false -- tried 5 times, can't get there
-      end
+      noPath = noPath + 1
+      pathfinder()
+      return false -- tried 5 times, can't get there
     end
   else
     if retries >= 100 then
-      if CaveBot.Config.get("skipBlocked") then
-        debugLog("info", string.format("CaveBot: Skipping unreachable waypoint after 100 retries at (%d, %d, %d) - moving to next",
-          pos.x or 0, pos.y or 0, pos.z or 0))
-        noPath = noPath + 1
-        pathfinder()
-        return false -- Skip this waypoint and move to next
-      else
-        noPath = noPath + 1
-        pathfinder()
-        return false -- tried 100 times, can't get there
-      end
-    end
+      noPath = noPath + 1
+      pathfinder()
+      return false -- tried 100 times, can't get there
+    end  
   end
 
   local precision = tonumber(pos[1][5])
-  pos = {x=tonumber(pos[1][2]), y=tonumber(pos[1][3]), z=tonumber(pos[1][4])}
+  pos = {x=tonumber(pos[1][2]), y=tonumber(pos[1][3]), z=tonumber(pos[1][4])}  
   local playerPos = player:getPosition()
-  if pos.z ~= playerPos.z then
-    if CaveBot.Config.get("skipBlocked") then
-      debugLog("info", string.format("CaveBot: Skipping waypoint on different floor at (%d, %d, %d) - moving to next",
-        pos.x, pos.y, pos.z))
-      noPath = noPath + 1
-      pathfinder()
-      return false -- Skip this waypoint and move to next
-    else
-      noPath = noPath + 1
-      pathfinder()
-      return false -- different floor
-    end
+  if pos.z ~= playerPos.z then 
+    noPath = noPath + 1
+    pathfinder()
+    return false -- different floor
   end
 
-  local maxDist = storage.extras.gotoMaxDistance or 100
-
+  local maxDist = storage.extras.gotoMaxDistance or 40
+  
   if math.abs(pos.x-playerPos.x) + math.abs(pos.y-playerPos.y) > maxDist then
-    if CaveBot.Config.get("skipBlocked") then
-      debugLog("info", string.format("CaveBot: Skipping waypoint too far away at (%d, %d, %d) - moving to next",
-        pos.x, pos.y, pos.z))
-      noPath = noPath + 1
-      pathfinder()
-      return false -- Skip this waypoint and move to next
-    else
-      noPath = noPath + 1
-      pathfinder()
-      return false -- too far way
-    end
+    noPath = noPath + 1
+    pathfinder()
+    return false -- too far way
   end
 
   local minimapColor = g_map.getMinimapColor(pos)
@@ -363,61 +331,21 @@ CaveBot.registerAction("goto", "green", function(value, retries, prev)
       noPath = 0
       return true -- already at position
   end
-  -- Enhanced creature avoidance based on targetbot status
-  local targetBotActive = TargetBot and TargetBot.isActive and TargetBot.isActive() or false
-  local ignoreCreaturesInPath = targetBotActive
-
-  if targetBotActive then
-    debugLog("debug", "CaveBot: TargetBot active - ignoring creatures in pathfinding")
-  else
-    debugLog("debug", "CaveBot: TargetBot inactive - avoiding creatures in pathfinding")
-  end
-
   -- check if there's a path to that place, ignore creatures and fields
-  local path = findPath(playerPos, pos, maxDist, {
-    ignoreNonPathable = true,
-    precision = 1,
-    ignoreCreatures = ignoreCreaturesInPath,
-    allowUnseen = true,
-    allowOnlyVisibleTiles = false
-  })
+  local path = findPath(playerPos, pos, maxDist, { ignoreNonPathable = true, precision = 1, ignoreCreatures = true, allowUnseen = true, allowOnlyVisibleTiles = false  })
   if not path then
-    -- Enhanced path checking for non-pathable waypoints
-    local directPath = findPath(playerPos, pos, maxDist, {
-      ignoreNonPathable = false,
-      precision = 1,
-      ignoreCreatures = ignoreCreaturesInPath,
-      allowUnseen = true,
-      allowOnlyVisibleTiles = false
-    })
-
-    if not directPath then
-      -- No path even ignoring non-pathable tiles, this waypoint is truly unreachable
-      if CaveBot.Config.get("skipBlocked") then
-        debugLog("info", string.format("CaveBot: Skipping non-pathable waypoint at (%d, %d, %d) - moving to next",
-          pos.x, pos.y, pos.z))
-        noPath = noPath + 1
-        pathfinder()
-        return false -- Skip this waypoint and move to next
-      else
-        if breakFurniture(pos, storage.extras.machete) then
-          CaveBot.delay(1000)
-          retries = 0
-          return "retry"
-        end
-        noPath = noPath + 1
-        pathfinder()
-        return false -- there's no way
-      end
+    if breakFurniture(pos, storage.extras.machete) then
+      CaveBot.delay(1000)
+      retries = 0
+      return "retry"
     end
+    noPath = noPath + 1
+    pathfinder()
+    return false -- there's no way
   end
 
   -- check if there's a path to destination but consider Creatures (attack only if trapped)
-  local path2 = findPath(playerPos, pos, maxDist, {
-    ignoreNonPathable = true,
-    precision = 1,
-    ignoreCreatures = ignoreCreaturesInPath
-  })
+  local path2 = findPath(playerPos, pos, maxDist, { ignoreNonPathable = true, precision = 1 })
   if not path2 then
     local foundMonster = false
     for i, dir in ipairs(path) do
@@ -459,18 +387,13 @@ CaveBot.registerAction("goto", "green", function(value, retries, prev)
     end
   end
   
-  -- try to find path, don't ignore creatures, don't ignore fields (unless targetbot is active)
-  if not CaveBot.Config.get("ignoreFields") and CaveBot.walkTo(pos, 40, { ignoreCreatures = ignoreCreaturesInPath }) then
+  -- try to find path, don't ignore creatures, don't ignore fields
+  if not CaveBot.Config.get("ignoreFields") and CaveBot.walkTo(pos, 40) then
     return "retry"
   end
-
+  
   -- try to find path, don't ignore creatures, ignore fields
-  if CaveBot.walkTo(pos, maxDist, {
-    ignoreNonPathable = true,
-    allowUnseen = true,
-    allowOnlyVisibleTiles = false,
-    ignoreCreatures = ignoreCreaturesInPath
-  }) then
+  if CaveBot.walkTo(pos, maxDist, { ignoreNonPathable = true, allowUnseen = true, allowOnlyVisibleTiles = false }) then
     return "retry"
   end
   
@@ -480,13 +403,7 @@ CaveBot.registerAction("goto", "green", function(value, retries, prev)
     if stairs then
       precison = 0
     end
-    if CaveBot.walkTo(pos, 50, {
-      ignoreNonPathable = true,
-      precision = precison,
-      allowUnseen = true,
-      allowOnlyVisibleTiles = false,
-      ignoreCreatures = ignoreCreaturesInPath
-    }) then
+    if CaveBot.walkTo(pos, 50, { ignoreNonPathable = true, precision = precison, allowUnseen = true, allowOnlyVisibleTiles = false }) then
       return "retry"
     end    
   end
@@ -498,21 +415,13 @@ CaveBot.registerAction("goto", "green", function(value, retries, prev)
   end
   
   if CaveBot.Config.get("skipBlocked") then
-    debugLog("info", string.format("CaveBot: Skipping blocked waypoint at (%d, %d, %d) - moving to next",
-      pos.x, pos.y, pos.z))
     noPath = noPath + 1
     pathfinder()
-    return false -- Skip this waypoint and move to next
+    return false
   end
 
-  -- everything else failed, try to walk ignoring creatures (based on targetbot status), maybe will work
-  CaveBot.walkTo(pos, maxDist, {
-    ignoreNonPathable = true,
-    precision = 1,
-    ignoreCreatures = ignoreCreaturesInPath,
-    allowUnseen = true,
-    allowOnlyVisibleTiles = false
-  })
+  -- everything else failed, try to walk ignoring creatures, maybe will work
+  CaveBot.walkTo(pos, maxDist, { ignoreNonPathable = true, precision = 1, ignoreCreatures = true, allowUnseen = true, allowOnlyVisibleTiles = false })
   return "retry"
 end)
 
