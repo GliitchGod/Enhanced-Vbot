@@ -9,7 +9,7 @@ if os.time() > storage.checkVersion + (12 * 60 * 60) then
 
     storage.checkVersion = os.time()
     
-    HTTP.get("https://raw.githubusercontent.com/Vithrax/vBot/main/vBot/version.txt", function(data, err)
+    HTTP.get("https://raw.githubusercontent.com/GliitchGod/Enhanced-Vbot/refs/heads/main/vBot/version.txt", function(data, err)
         if err then
           warn("[vBot updater]: Unable to check version:\n" .. err)
           return
